@@ -1,4 +1,4 @@
-const API_URL = import.meta.env.VITE_API_BASE_URL || 'https://ai-api-testing-platform.onrender.com/api/v1/auth';
+const API_URL = import.meta.env.VITE_API_BASE_URL || 'https://ai-api-testing-platform.onrender.com/api/v1/projects';
 
 // Get token from localStorage
 const getToken = () => {
