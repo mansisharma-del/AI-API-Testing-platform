@@ -20,7 +20,7 @@ app.use(cors({
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS','PATCH'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept']
 }));
-
+app.options('*', cors());
 app.use(helmet());
 app.use(express.json());
 
@@ -47,7 +47,7 @@ app.get('/', (req, res) => {
     status: 'online'
   });
 });
-app.options('*', cors());
+
 // ✅ Error Handler - SABSE LAST MEIN
 app.use(errorHandler);
 
