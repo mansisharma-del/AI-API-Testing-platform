@@ -17,8 +17,8 @@ const app = express();
 app.use(cors({
   origin: '*',  // ✅ Allow all origins
   credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS','PATCH'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept']
 }));
 
 app.use(helmet());
@@ -47,7 +47,7 @@ app.get('/', (req, res) => {
     status: 'online'
   });
 });
-
+app.options('*', cors());
 // ✅ Error Handler - SABSE LAST MEIN
 app.use(errorHandler);
 
