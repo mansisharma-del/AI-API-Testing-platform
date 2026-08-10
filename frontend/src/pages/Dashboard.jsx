@@ -4,6 +4,7 @@ import { useProjects } from '../context/ProjectContext.jsx';
 import { logout, getCurrentUser } from '../services/auth.service.js';
 import { Plus, FolderOpen, TestTube, Activity, TrendingUp, Trash2, Edit, Eye, X, Check, AlertCircle } from 'lucide-react';
 import toast, { Toaster } from 'react-hot-toast';
+import { createProject, getProjects } from '../services/project.service';
 
 const Dashboard = () => {
   const navigate = useNavigate();
