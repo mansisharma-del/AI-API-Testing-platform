@@ -1,6 +1,9 @@
+
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+
 import { logout, getCurrentUser } from '../services/auth.service.js';
+
 import {
   createProject,
   getProjects,
@@ -26,18 +29,18 @@ const Dashboard = () => {
   const navigate = useNavigate();
 
   // ==========================================
-  // User
+  // USER
   // ==========================================
   const [user, setUser] = useState(getCurrentUser());
 
   // ==========================================
-  // Projects
+  // PROJECTS
   // ==========================================
   const [projects, setProjects] = useState([]);
   const [loading, setLoading] = useState(true);
 
   // ==========================================
-  // Create Project Modal
+  // CREATE PROJECT MODAL
   // ==========================================
   const [showCreateModal, setShowCreateModal] = useState(false);
 
@@ -51,7 +54,7 @@ const Dashboard = () => {
 
 
   // ==========================================
-  // Load Projects
+  // LOAD PROJECTS
   // ==========================================
   const loadProjects = async () => {
     try {
@@ -59,10 +62,8 @@ const Dashboard = () => {
 
       const data = await getProjects();
 
-      /*
-       * Depending on your backend response structure,
-       * projects may be returned directly or inside data.projects.
-       */
+      console.log('Projects response:', data);
+
       if (Array.isArray(data)) {
         setProjects(data);
       } else if (Array.isArray(data.projects)) {
@@ -87,7 +88,7 @@ const Dashboard = () => {
 
 
   // ==========================================
-  // Load projects when dashboard opens
+  // LOAD PROJECTS ON DASHBOARD OPEN
   // ==========================================
   useEffect(() => {
     loadProjects();
@@ -95,7 +96,7 @@ const Dashboard = () => {
 
 
   // ==========================================
-  // Logout
+  // LOGOUT
   // ==========================================
   const handleLogout = () => {
     logout();
@@ -104,7 +105,7 @@ const Dashboard = () => {
 
 
   // ==========================================
-  // Create Project
+  // CREATE PROJECT
   // ==========================================
   const handleCreateProject = async (e) => {
     e.preventDefault();
@@ -117,7 +118,8 @@ const Dashboard = () => {
     try {
       setSubmitting(true);
 
-      console.log('Creating project:', formData);
+      console.log('Creating project...');
+      console.log('Project data:', formData);
 
       const result = await createProject(formData);
 
@@ -135,7 +137,7 @@ const Dashboard = () => {
         githubRepoUrl: '',
       });
 
-      // Reload projects
+      // Refresh projects
       await loadProjects();
 
     } catch (error) {
@@ -152,10 +154,9 @@ const Dashboard = () => {
 
 
   // ==========================================
-  // Delete Project
+  // DELETE PROJECT
   // ==========================================
   const handleDeleteProject = async (id, name) => {
-
     const confirmed = window.confirm(
       `Are you sure you want to delete "${name}"?`
     );
@@ -165,12 +166,10 @@ const Dashboard = () => {
     }
 
     try {
-
       await deleteProject(id);
 
       toast.success('Project deleted successfully');
 
-      // Remove from UI immediately
       setProjects((prevProjects) =>
         prevProjects.filter(
           (project) => project.id !== id
@@ -178,7 +177,6 @@ const Dashboard = () => {
       );
 
     } catch (error) {
-
       console.error('Delete project error:', error);
 
       toast.error(
@@ -189,7 +187,7 @@ const Dashboard = () => {
 
 
   // ==========================================
-  // Stats
+  // STATS
   // ==========================================
   const stats = [
     {
@@ -220,7 +218,7 @@ const Dashboard = () => {
 
 
   // ==========================================
-  // Stat Colors
+  // STAT COLORS
   // ==========================================
   const colorClasses = {
     indigo: 'bg-indigo-50 text-indigo-600',
@@ -231,7 +229,7 @@ const Dashboard = () => {
 
 
   // ==========================================
-  // Project Status Colors
+  // STATUS COLORS
   // ==========================================
   const statusColors = {
     DRAFT: 'bg-gray-100 text-gray-600',
@@ -249,7 +247,7 @@ const Dashboard = () => {
 
 
       {/* ========================================
-          Navbar
+          NAVBAR
       ======================================== */}
       <nav className="bg-white border-b border-gray-200 sticky top-0 z-50 shadow-sm">
 
@@ -279,19 +277,17 @@ const Dashboard = () => {
               <div className="flex items-center gap-3">
 
                 <div className="w-10 h-10 bg-gradient-to-r from-indigo-500 to-purple-500 rounded-full flex items-center justify-center text-white font-semibold">
-
                   {user?.fullName?.charAt(0) || 'U'}
-
                 </div>
 
                 <div className="hidden md:block">
 
                   <p className="text-sm font-medium text-gray-800">
-                    {user?.fullName}
+                    {user?.fullName || 'User'}
                   </p>
 
                   <p className="text-xs text-gray-500">
-                    {user?.email}
+                    {user?.email || ''}
                   </p>
 
                 </div>
@@ -316,7 +312,7 @@ const Dashboard = () => {
 
 
       {/* ========================================
-          Main Content
+          MAIN
       ======================================== */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
 
@@ -329,7 +325,7 @@ const Dashboard = () => {
             <div>
 
               <h1 className="text-3xl font-bold text-gray-800">
-                Welcome back, {user?.fullName}! 👋
+                Welcome back, {user?.fullName || 'User'}! 👋
               </h1>
 
               <p className="text-gray-500 mt-1">
@@ -343,11 +339,8 @@ const Dashboard = () => {
               onClick={() => setShowCreateModal(true)}
               className="bg-gradient-to-r from-indigo-500 to-purple-500 text-white px-6 py-3 rounded-xl shadow-lg shadow-indigo-500/30 hover:shadow-xl transition flex items-center gap-2 font-semibold"
             >
-
               <Plus className="w-5 h-5" />
-
               New Project
-
             </button>
 
           </div>
@@ -356,7 +349,7 @@ const Dashboard = () => {
 
 
         {/* ========================================
-            Stats
+            STATS
         ======================================== */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
 
@@ -365,7 +358,6 @@ const Dashboard = () => {
             const Icon = stat.icon;
 
             return (
-
               <div
                 key={index}
                 className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 hover:shadow-md transition"
@@ -389,15 +381,12 @@ const Dashboard = () => {
                   <div
                     className={`p-3 rounded-xl ${colorClasses[stat.color]}`}
                   >
-
                     <Icon className="w-5 h-5" />
-
                   </div>
 
                 </div>
 
               </div>
-
             );
 
           })}
@@ -406,7 +395,7 @@ const Dashboard = () => {
 
 
         {/* ========================================
-            Projects
+            PROJECTS
         ======================================== */}
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
 
@@ -422,9 +411,7 @@ const Dashboard = () => {
 
 
             <span className="text-sm text-gray-500">
-
               {projects.length} projects
-
             </span>
 
           </div>
@@ -448,7 +435,7 @@ const Dashboard = () => {
 
           ) : projects.length === 0 ? (
 
-            /* Empty */
+            /* Empty State */
             <div className="text-center py-12">
 
               <div className="text-6xl mb-4">
@@ -476,7 +463,7 @@ const Dashboard = () => {
 
           ) : (
 
-            /* Projects Grid */
+            /* Project Grid */
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
 
               {projects.map((project) => (
@@ -513,11 +500,9 @@ const Dashboard = () => {
 
 
                         {project.githubRepoUrl && (
-
                           <span className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded-full">
                             🔗 GitHub
                           </span>
-
                         )}
 
                       </div>
@@ -535,9 +520,7 @@ const Dashboard = () => {
                         className="p-1.5 hover:bg-gray-100 rounded-lg transition"
                         title="View"
                       >
-
                         <Eye className="w-4 h-4 text-gray-500" />
-
                       </button>
 
 
@@ -549,9 +532,7 @@ const Dashboard = () => {
                         className="p-1.5 hover:bg-gray-100 rounded-lg transition"
                         title="Edit"
                       >
-
                         <Edit className="w-4 h-4 text-gray-500" />
-
                       </button>
 
 
@@ -566,9 +547,7 @@ const Dashboard = () => {
                         className="p-1.5 hover:bg-red-50 rounded-lg transition"
                         title="Delete"
                       >
-
                         <Trash2 className="w-4 h-4 text-red-500" />
-
                       </button>
 
                     </div>
@@ -606,7 +585,7 @@ const Dashboard = () => {
 
 
       {/* ========================================
-          Create Project Modal
+          CREATE PROJECT MODAL
       ======================================== */}
       {showCreateModal && (
 
@@ -615,7 +594,7 @@ const Dashboard = () => {
           <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6">
 
 
-            {/* Header */}
+            {/* Modal Header */}
             <div className="flex items-center justify-between mb-4">
 
               <h2 className="text-xl font-bold text-gray-800">
@@ -627,9 +606,7 @@ const Dashboard = () => {
                 onClick={() => setShowCreateModal(false)}
                 className="p-2 hover:bg-gray-100 rounded-lg transition"
               >
-
                 <X className="w-5 h-5 text-gray-500" />
-
               </button>
 
             </div>
@@ -638,8 +615,7 @@ const Dashboard = () => {
             {/* Form */}
             <form onSubmit={handleCreateProject}>
 
-
-              {/* Project Name */}
+              {/* Name */}
               <div className="mb-4">
 
                 <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -686,7 +662,7 @@ const Dashboard = () => {
               </div>
 
 
-              {/* GitHub URL */}
+              {/* GitHub */}
               <div className="mb-6">
 
                 <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -703,7 +679,7 @@ const Dashboard = () => {
                     })
                   }
                   className="w-full px-4 py-2 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                  placeholder="https://github.com/username/repo"
+                  placeholder="https://github.com/username/repository"
                 />
 
               </div>
@@ -726,11 +702,9 @@ const Dashboard = () => {
                   disabled={submitting}
                   className="flex-1 bg-gradient-to-r from-indigo-600 to-purple-600 text-white px-4 py-2 rounded-xl hover:from-indigo-700 hover:to-purple-700 transition disabled:opacity-50"
                 >
-
                   {submitting
                     ? 'Creating...'
                     : 'Create Project'}
-
                 </button>
 
               </div>
