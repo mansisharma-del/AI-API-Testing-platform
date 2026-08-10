@@ -1,48 +1,79 @@
 // frontend/src/services/project.service.js
 
-// Base API URL
-// Vercel Environment Variable:
-// VITE_API_BASE_URL=https://ai-api-testing-platform.onrender.com/api/v1
+// ======================================================
+// PROJECT API CONFIGURATION
+// ======================================================
+
 const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL ||
   'https://ai-api-testing-platform.onrender.com/api/v1';
 
-// Projects API
+// IMPORTANT:
+// VITE_API_BASE_URL ends at /api/v1
+// Therefore we explicitly add /projects here.
 const API_URL = `${API_BASE_URL}/projects`;
 
 
-// ==========================================
-// Get Authentication Token
-// ==========================================
+// ======================================================
+// GET TOKEN
+// ======================================================
+
 const getToken = () => {
   return localStorage.getItem('token');
 };
 
 
-// ==========================================
-// Create a New Project
-// ==========================================
+// ======================================================
+// COMMON HEADERS
+// ======================================================
+
+const getHeaders = () => {
+  const token = getToken();
+
+  return {
+    'Content-Type': 'application/json',
+    ...(token
+      ? {
+          Authorization: `Bearer ${token}`,
+        }
+      : {}),
+  };
+};
+
+
+// ======================================================
+// CREATE PROJECT
+// ======================================================
+
 export const createProject = async (projectData) => {
   try {
+    console.log('CREATE PROJECT URL:', API_URL);
+    console.log('CREATE PROJECT DATA:', projectData);
+
     const response = await fetch(API_URL, {
       method: 'POST',
-
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${getToken()}`,
-      },
-
+      headers: getHeaders(),
       body: JSON.stringify(projectData),
     });
 
-    const data = await response.json();
+    const text = await response.text();
+
+    let data;
+
+    try {
+      data = JSON.parse(text);
+    } catch {
+      data = {
+        error: text || 'Invalid server response',
+      };
+    }
 
     if (!response.ok) {
       throw new Error(
-        data.detail ||
-        data.message ||
         data.error ||
-        'Failed to create project'
+        data.message ||
+        data.detail ||
+        `Request failed with status ${response.status}`
       );
     }
 
@@ -55,28 +86,37 @@ export const createProject = async (projectData) => {
 };
 
 
-// ==========================================
-// Get All Projects
-// ==========================================
+// ======================================================
+// GET ALL PROJECTS
+// ======================================================
+
 export const getProjects = async () => {
   try {
+    console.log('GET PROJECTS URL:', API_URL);
+
     const response = await fetch(API_URL, {
       method: 'GET',
-
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${getToken()}`,
-      },
+      headers: getHeaders(),
     });
 
-    const data = await response.json();
+    const text = await response.text();
+
+    let data;
+
+    try {
+      data = JSON.parse(text);
+    } catch {
+      data = {
+        error: text || 'Invalid server response',
+      };
+    }
 
     if (!response.ok) {
       throw new Error(
-        data.detail ||
-        data.message ||
         data.error ||
-        'Failed to fetch projects'
+        data.message ||
+        data.detail ||
+        `Request failed with status ${response.status}`
       );
     }
 
@@ -89,28 +129,35 @@ export const getProjects = async () => {
 };
 
 
-// ==========================================
-// Get a Single Project
-// ==========================================
+// ======================================================
+// GET SINGLE PROJECT
+// ======================================================
+
 export const getProject = async (id) => {
   try {
     const response = await fetch(`${API_URL}/${id}`, {
       method: 'GET',
-
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${getToken()}`,
-      },
+      headers: getHeaders(),
     });
 
-    const data = await response.json();
+    const text = await response.text();
+
+    let data;
+
+    try {
+      data = JSON.parse(text);
+    } catch {
+      data = {
+        error: text || 'Invalid server response',
+      };
+    }
 
     if (!response.ok) {
       throw new Error(
-        data.detail ||
-        data.message ||
         data.error ||
-        'Failed to fetch project'
+        data.message ||
+        data.detail ||
+        `Request failed with status ${response.status}`
       );
     }
 
@@ -123,30 +170,36 @@ export const getProject = async (id) => {
 };
 
 
-// ==========================================
-// Update a Project
-// ==========================================
+// ======================================================
+// UPDATE PROJECT
+// ======================================================
+
 export const updateProject = async (id, projectData) => {
   try {
     const response = await fetch(`${API_URL}/${id}`, {
       method: 'PUT',
-
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${getToken()}`,
-      },
-
+      headers: getHeaders(),
       body: JSON.stringify(projectData),
     });
 
-    const data = await response.json();
+    const text = await response.text();
+
+    let data;
+
+    try {
+      data = JSON.parse(text);
+    } catch {
+      data = {
+        error: text || 'Invalid server response',
+      };
+    }
 
     if (!response.ok) {
       throw new Error(
-        data.detail ||
-        data.message ||
         data.error ||
-        'Failed to update project'
+        data.message ||
+        data.detail ||
+        `Request failed with status ${response.status}`
       );
     }
 
@@ -159,28 +212,35 @@ export const updateProject = async (id, projectData) => {
 };
 
 
-// ==========================================
-// Delete a Project
-// ==========================================
+// ======================================================
+// DELETE PROJECT
+// ======================================================
+
 export const deleteProject = async (id) => {
   try {
     const response = await fetch(`${API_URL}/${id}`, {
       method: 'DELETE',
-
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${getToken()}`,
-      },
+      headers: getHeaders(),
     });
 
-    const data = await response.json();
+    const text = await response.text();
+
+    let data;
+
+    try {
+      data = JSON.parse(text);
+    } catch {
+      data = {
+        error: text || 'Invalid server response',
+      };
+    }
 
     if (!response.ok) {
       throw new Error(
-        data.detail ||
-        data.message ||
         data.error ||
-        'Failed to delete project'
+        data.message ||
+        data.detail ||
+        `Request failed with status ${response.status}`
       );
     }
 
