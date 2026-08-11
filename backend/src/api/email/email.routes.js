@@ -1,23 +1,41 @@
 import express from 'express';
-import { 
-  sendReportEmail, 
+
+import {
+  sendReportEmail,
   sendWelcome,
   getEmailStatus
 } from './email.controller.js';
+
 import { authMiddleware } from '../../core/middlewares/auth.middleware.js';
 
 const router = express.Router();
 
-// All routes are protected
+// ======================================================
+// AUTHENTICATION
+// ======================================================
+
+// All email routes require authentication
 router.use(authMiddleware);
 
-// Send test report via email
+// ======================================================
+// SEND TEST REPORT EMAIL
+// POST /api/v1/email/report/:projectId
+// ======================================================
+
 router.post('/report/:projectId', sendReportEmail);
 
-// Send welcome email
+// ======================================================
+// SEND WELCOME EMAIL
+// POST /api/v1/email/welcome
+// ======================================================
+
 router.post('/welcome', sendWelcome);
 
-// Check email configuration status
+// ======================================================
+// EMAIL STATUS
+// GET /api/v1/email/status
+// ======================================================
+
 router.get('/status', getEmailStatus);
 
 export default router;
