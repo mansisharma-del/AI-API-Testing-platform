@@ -56,7 +56,8 @@ app.use(
       'Content-Type',
       'Authorization',
       'X-Requested-With',
-      'Accept'
+      'Accept',
+      'Cache-Control'
     ]
   })
 );
