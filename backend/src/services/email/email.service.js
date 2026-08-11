@@ -3,173 +3,161 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
-// ======================================================
-// SMTP CONFIGURATION
-// ======================================================
-
-const getSMTPConfig = () => {
-  const enabled = String(process.env.EMAIL_ENABLED || 'false').toLowerCase() === 'true';
-
-  const host = process.env.SMTP_HOST || 'smtp.gmail.com';
-  const port = Number(process.env.SMTP_PORT || 587);
-
-  const secure =
-    String(process.env.SMTP_SECURE || 'false').toLowerCase() === 'true';
-
-  const user = process.env.SMTP_USER;
-  const pass = process.env.SMTP_PASS;
-
-  const from =
-    process.env.SMTP_FROM ||
-    process.env.SMTP_USER ||
-    'noreply@apitesting.com';
-
-  return {
-    enabled,
-    host,
-    port,
-    secure,
-    user,
-    pass,
-    from
-  };
-};
 
 // ======================================================
 // CREATE SMTP TRANSPORTER
 // ======================================================
 
 const createTransporter = () => {
-  const smtp = getSMTPConfig();
 
   console.log('========================================');
-  console.log('📧 SMTP CONFIGURATION');
-  console.log('========================================');
-  console.log('📧 EMAIL_ENABLED:', smtp.enabled);
-  console.log('📧 SMTP_HOST:', smtp.host);
-  console.log('📧 SMTP_PORT:', smtp.port);
-  console.log('📧 SMTP_SECURE:', smtp.secure);
-  console.log('📧 SMTP_USER:', smtp.user || '❌ Missing');
-  console.log('📧 SMTP_PASS:', smtp.pass ? '✅ Set' : '❌ Missing');
-  console.log('📧 SMTP_FROM:', smtp.from);
+  console.log('📧 CREATING EMAIL TRANSPORTER');
   console.log('========================================');
 
-  if (!smtp.enabled) {
-    console.log('⚠️ Email notifications are disabled');
+
+  const emailEnabled =
+    process.env.EMAIL_ENABLED === 'true';
+
+  const smtpHost =
+    process.env.SMTP_HOST ||
+    'smtp.gmail.com';
+
+  const smtpPort =
+    parseInt(
+      process.env.SMTP_PORT || '587',
+      10
+    );
+
+  const smtpSecure =
+    process.env.SMTP_SECURE === 'true';
+
+  const smtpUser =
+    process.env.SMTP_USER;
+
+  const smtpPass =
+    process.env.SMTP_PASS;
+
+
+  console.log('📧 EMAIL_ENABLED:', emailEnabled);
+  console.log('📧 SMTP_HOST:', smtpHost);
+  console.log('📧 SMTP_PORT:', smtpPort);
+  console.log('📧 SMTP_SECURE:', smtpSecure);
+  console.log('📧 SMTP_USER:', smtpUser || '❌ Missing');
+
+  console.log(
+    '📧 SMTP_PASS:',
+    smtpPass ? '✅ Set' : '❌ Missing'
+  );
+
+
+  // ======================================================
+  // EMAIL DISABLED
+  // ======================================================
+
+  if (!emailEnabled) {
+
+    console.log(
+      '⚠️ EMAIL_ENABLED is not true'
+    );
+
     return null;
   }
 
-  if (!smtp.user || !smtp.pass) {
-    console.error('❌ SMTP credentials are missing');
+
+  // ======================================================
+  // SMTP CREDENTIAL CHECK
+  // ======================================================
+
+  if (!smtpUser || !smtpPass) {
+
+    console.log(
+      '❌ SMTP_USER or SMTP_PASS is missing'
+    );
+
     return null;
   }
+
+
+  // ======================================================
+  // CREATE TRANSPORTER
+  // ======================================================
 
   try {
-    const transporter = nodemailer.createTransport({
-      host: smtp.host,
-      port: smtp.port,
-      secure: smtp.secure,
 
-      auth: {
-        user: smtp.user,
-        pass: smtp.pass
-      },
+    const transporter =
+      nodemailer.createTransport({
 
-      // Helpful for hosted environments such as Render
-      connectionTimeout: 15000,
-      greetingTimeout: 15000,
-      socketTimeout: 20000,
+        host: smtpHost,
 
-      tls: {
-        rejectUnauthorized: false
-      }
-    });
+        port: smtpPort,
+
+        secure: smtpSecure,
+
+        auth: {
+          user: smtpUser,
+          pass: smtpPass
+        },
+
+        tls: {
+          rejectUnauthorized: false
+        },
+
+        connectionTimeout: 15000,
+
+        greetingTimeout: 15000,
+
+        socketTimeout: 20000
+      });
+
+
+    console.log(
+      '✅ SMTP transporter created'
+    );
+
 
     return transporter;
+
   } catch (error) {
-    console.error('❌ Failed to create SMTP transporter:', error.message);
+
+    console.error(
+      '❌ Failed to create SMTP transporter:',
+      error
+    );
+
     return null;
   }
 };
 
-// ======================================================
-// VERIFY SMTP CONNECTION
-// ======================================================
-
-export const verifyEmailTransporter = async () => {
-  try {
-    const transporter = createTransporter();
-
-    if (!transporter) {
-      return {
-        success: false,
-        configured: false,
-        error: 'Email is not configured. Check EMAIL_ENABLED and SMTP credentials.'
-      };
-    }
-
-    await transporter.verify();
-
-    console.log('========================================');
-    console.log('✅ SMTP transporter verified successfully');
-    console.log('========================================');
-
-    return {
-      success: true,
-      configured: true,
-      message: 'SMTP connection verified successfully'
-    };
-  } catch (error) {
-    console.error('========================================');
-    console.error('❌ SMTP VERIFICATION FAILED');
-    console.error('❌ Error:', error.message);
-    console.error('❌ Code:', error.code || 'N/A');
-    console.error('❌ Command:', error.command || 'N/A');
-    console.error('========================================');
-
-    return {
-      success: false,
-      configured: true,
-      error: error.message,
-      code: error.code || null,
-      command: error.command || null
-    };
-  }
-};
 
 // ======================================================
 // CHECK EMAIL CONFIGURATION
 // ======================================================
 
 export const checkEmailConfig = () => {
-  const smtp = getSMTPConfig();
 
-  if (!smtp.enabled) {
+  const transporter =
+    createTransporter();
+
+
+  if (!transporter) {
+
     return {
       configured: false,
-      enabled: false,
-      message: 'Email notifications are disabled'
+
+      message:
+        'Email not configured. Check EMAIL_ENABLED, SMTP_USER and SMTP_PASS.'
     };
   }
 
-  if (!smtp.user || !smtp.pass) {
-    return {
-      configured: false,
-      enabled: true,
-      message: 'SMTP credentials are missing'
-    };
-  }
 
   return {
     configured: true,
-    enabled: true,
-    host: smtp.host,
-    port: smtp.port,
-    secure: smtp.secure,
-    from: smtp.from,
-    message: 'SMTP configuration is present'
+
+    message:
+      'Email configuration loaded successfully'
   };
 };
+
 
 // ======================================================
 // SEND EMAIL
@@ -180,538 +168,926 @@ export const sendEmail = async ({
   subject,
   html,
   text,
-  attachments = []
+  attachments
 }) => {
+
   try {
-    // --------------------------------------------------
-    // Validate recipient
-    // --------------------------------------------------
+
+    // ====================================================
+    // RECIPIENT CHECK
+    // ====================================================
 
     if (!to) {
+
       return {
         success: false,
         error: 'Recipient email is required'
       };
     }
 
-    // --------------------------------------------------
-    // Create transporter
-    // --------------------------------------------------
 
-    const transporter = createTransporter();
+    console.log('========================================');
+    console.log('📧 STARTING EMAIL SEND');
+    console.log('========================================');
+
+    console.log('📧 To:', to);
+
+    console.log(
+      '📧 Subject:',
+      subject || 'Test Report'
+    );
+
+
+    // ====================================================
+    // CREATE TRANSPORTER
+    // ====================================================
+
+    const transporter =
+      createTransporter();
+
 
     if (!transporter) {
+
       return {
         success: false,
+
         error:
-          'Email is not configured. Check EMAIL_ENABLED, SMTP_USER and SMTP_PASS.'
+          'Email transporter could not be created. Check SMTP configuration.'
       };
     }
 
-    const smtp = getSMTPConfig();
 
-    // --------------------------------------------------
-    // Mail options
-    // --------------------------------------------------
+    // ====================================================
+    // VERIFY SMTP CONNECTION
+    // ====================================================
+
+    console.log(
+      '📧 Verifying SMTP connection...'
+    );
+
+
+    try {
+
+      await transporter.verify();
+
+      console.log(
+        '✅ SMTP connection verified successfully'
+      );
+
+    } catch (verifyError) {
+
+      console.error(
+        '========================================'
+      );
+
+      console.error(
+        '❌ SMTP VERIFICATION FAILED'
+      );
+
+      console.error(
+        '========================================'
+      );
+
+      console.error(
+        'Message:',
+        verifyError?.message
+      );
+
+      console.error(
+        'Code:',
+        verifyError?.code
+      );
+
+      console.error(
+        'Response:',
+        verifyError?.response
+      );
+
+      console.error(
+        'Response Code:',
+        verifyError?.responseCode
+      );
+
+      console.error(
+        'Command:',
+        verifyError?.command
+      );
+
+
+      return {
+        success: false,
+
+        error:
+          verifyError?.message ||
+          'SMTP verification failed',
+
+        code:
+          verifyError?.code ||
+          null,
+
+        response:
+          verifyError?.response ||
+          null,
+
+        responseCode:
+          verifyError?.responseCode ||
+          null,
+
+        command:
+          verifyError?.command ||
+          null
+      };
+    }
+
+
+    // ====================================================
+    // MAIL OPTIONS
+    // ====================================================
+
+    const fromEmail =
+      process.env.SMTP_FROM ||
+      process.env.SMTP_USER;
+
 
     const mailOptions = {
-      from: smtp.from,
-      to,
+
+      from: fromEmail,
+
+      to: to,
+
       subject:
-        subject || 'Test Report from AI API Testing Platform',
+        subject ||
+        'Test Report from AI API Testing Platform',
 
       html:
         html ||
-        '<p>Test Report from AI API Testing Platform</p>',
+        '<p>Test Report</p>',
 
       text:
         text ||
-        (html
-          ? html.replace(/<[^>]*>/g, '')
-          : 'Test Report from AI API Testing Platform'),
+        (
+          html
+            ? html.replace(/<[^>]*>/g, '')
+            : 'Test Report'
+        ),
 
-      attachments: Array.isArray(attachments)
-        ? attachments
-        : []
+      attachments:
+        attachments || []
     };
 
-    console.log('========================================');
-    console.log('📧 SENDING EMAIL');
-    console.log('========================================');
-    console.log('📧 To:', to);
-    console.log('📧 From:', smtp.from);
-    console.log('📧 Subject:', mailOptions.subject);
-    console.log('📧 Attachments:', mailOptions.attachments.length);
+
+    console.log('📧 From:', fromEmail);
+
+    console.log(
+      '📧 Sending email through SMTP...'
+    );
+
+
+    // ====================================================
+    // SEND EMAIL
+    // ====================================================
+
+    const info =
+      await transporter.sendMail(
+        mailOptions
+      );
+
+
+    // ====================================================
+    // SUCCESS
+    // ====================================================
+
     console.log('========================================');
 
-    // --------------------------------------------------
-    // Send email
-    // --------------------------------------------------
+    console.log(
+      '✅ EMAIL SENT SUCCESSFULLY'
+    );
 
-    const info = await transporter.sendMail(mailOptions);
+    console.log(
+      '📧 Message ID:',
+      info.messageId
+    );
+
+    console.log(
+      '📧 Accepted:',
+      info.accepted
+    );
+
+    console.log(
+      '📧 Rejected:',
+      info.rejected
+    );
 
     console.log('========================================');
-    console.log('✅ EMAIL SENT SUCCESSFULLY');
-    console.log('========================================');
-    console.log('📧 To:', to);
-    console.log('📧 Message ID:', info.messageId);
-    console.log('📧 Response:', info.response || 'N/A');
-    console.log('========================================');
+
 
     return {
+
       success: true,
-      messageId: info.messageId,
-      sentTo: to,
-      response: info.response || null
+
+      info,
+
+      messageId:
+        info.messageId,
+
+      sentTo:
+        to
     };
+
+
   } catch (error) {
-    console.error('========================================');
-    console.error('❌ EMAIL SEND FAILED');
-    console.error('========================================');
-    console.error('❌ Message:', error.message);
-    console.error('❌ Code:', error.code || 'N/A');
-    console.error('❌ Command:', error.command || 'N/A');
-    console.error('❌ Response:', error.response || 'N/A');
+
+    // ====================================================
+    // SEND ERROR
+    // ====================================================
+
     console.error('========================================');
 
+    console.error(
+      '❌ EMAIL SEND ERROR'
+    );
+
+    console.error('========================================');
+
+    console.error(
+      'Name:',
+      error?.name
+    );
+
+    console.error(
+      'Message:',
+      error?.message
+    );
+
+    console.error(
+      'Code:',
+      error?.code
+    );
+
+    console.error(
+      'Response:',
+      error?.response
+    );
+
+    console.error(
+      'Response Code:',
+      error?.responseCode
+    );
+
+    console.error(
+      'Command:',
+      error?.command
+    );
+
+    console.error(
+      'Stack:',
+      error?.stack
+    );
+
+    console.error('========================================');
+
+
     return {
+
       success: false,
-      error: error.message || 'Failed to send email',
-      code: error.code || null,
-      command: error.command || null,
-      response: error.response || null
+
+      error:
+        error?.message ||
+        'Failed to send email',
+
+      code:
+        error?.code ||
+        null,
+
+      response:
+        error?.response ||
+        null,
+
+      responseCode:
+        error?.responseCode ||
+        null,
+
+      command:
+        error?.command ||
+        null
     };
   }
 };
+
 
 // ======================================================
 // SEND TEST REPORT EMAIL
 // ======================================================
 
 export const sendTestReportEmail = async ({
-  to,
   projectName,
   report,
   downloadUrls,
   recipients,
   token
 }) => {
-  try {
-    const emails = Array.isArray(recipients)
-      ? recipients
-      : [to];
 
-    const validEmails = emails
-      .filter(Boolean)
-      .map(email => String(email).trim())
-      .filter(email => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email));
+  try {
+
+    // ====================================================
+    // VALIDATE RECIPIENTS
+    // ====================================================
+
+    const emails =
+      Array.isArray(recipients)
+        ? recipients
+        : [];
+
+
+    const validEmails =
+      emails
+        .filter(
+          (email) =>
+            typeof email === 'string' &&
+            email.includes('@')
+        )
+        .map(
+          (email) =>
+            email.trim()
+        );
+
 
     if (validEmails.length === 0) {
+
       return {
         success: false,
-        error: 'No valid email addresses provided'
+        error:
+          'No valid email addresses provided'
       };
     }
 
-    if (!report) {
-      return {
-        success: false,
-        error: 'Report data is required'
-      };
-    }
 
     console.log('========================================');
-    console.log('📊 REPORT EMAIL');
-    console.log('========================================');
-    console.log('📊 Project:', projectName);
-    console.log('📧 Recipients:', validEmails.length);
-    console.log('🔗 HTML URL:', downloadUrls?.html || 'Not provided');
-    console.log('🔗 PDF URL:', downloadUrls?.pdf || 'Not provided');
-    console.log('🔐 Token:', token ? '✅ Received' : '❌ Missing');
+
+    console.log(
+      '📊 SEND TEST REPORT EMAIL'
+    );
+
+    console.log(
+      '📧 Recipients:',
+      validEmails
+    );
+
+    console.log(
+      '🔐 Token:',
+      token ? '✅ Received' : '⚠️ Missing'
+    );
+
     console.log('========================================');
 
-    const summary = report.summary || {
-      total: 0,
-      passed: 0,
-      failed: 0,
-      errors: 0,
-      successRate: '0%',
-      duration: '0ms',
-      avgResponseTime: '0ms'
-    };
 
-    const successRateNumber =
-      parseFloat(String(summary.successRate).replace('%', '')) || 0;
+    // ====================================================
+    // REPORT DATA
+    // ====================================================
+
+    const summary =
+      report?.summary || {};
+
+
+    const successRate =
+      Number(summary.successRate || 0);
+
 
     const statusIcon =
-      successRateNumber >= 80
+      successRate >= 80
         ? '✅'
-        : successRateNumber >= 60
+        : successRate >= 60
           ? '⚠️'
           : '❌';
 
-    // --------------------------------------------------
-    // Secure report links
-    // --------------------------------------------------
 
-    const htmlUrl = downloadUrls?.html
-      ? `${downloadUrls.html}${downloadUrls.html.includes('?') ? '&' : '?'}token=${encodeURIComponent(token || '')}`
-      : null;
+    // ====================================================
+    // DOWNLOAD URLS
+    // ====================================================
 
-    const pdfUrl = downloadUrls?.pdf
-      ? `${downloadUrls.pdf}${downloadUrls.pdf.includes('?') ? '&' : '?'}token=${encodeURIComponent(token || '')}`
-      : null;
+    const htmlUrl =
+      downloadUrls?.html
+        ? (
+            token
+              ? `${downloadUrls.html}?token=${encodeURIComponent(token)}`
+              : downloadUrls.html
+          )
+        : '';
 
-    // --------------------------------------------------
-    // Email HTML
-    // --------------------------------------------------
+
+    const pdfUrl =
+      downloadUrls?.pdf
+        ? (
+            token
+              ? `${downloadUrls.pdf}?token=${encodeURIComponent(token)}`
+              : downloadUrls.pdf
+          )
+        : '';
+
+
+    // ====================================================
+    // EMAIL HTML
+    // ====================================================
 
     const html = `
 <!DOCTYPE html>
-<html lang="en">
+
+<html>
+
 <head>
-  <meta charset="UTF-8">
 
-  <meta
-    name="viewport"
-    content="width=device-width, initial-scale=1.0"
-  >
+<meta charset="UTF-8">
 
-  <title>Test Report - ${projectName}</title>
+<meta
+  name="viewport"
+  content="width=device-width, initial-scale=1.0"
+/>
 
-  <style>
-    body {
-      font-family:
-        -apple-system,
-        BlinkMacSystemFont,
-        "Segoe UI",
-        Roboto,
-        sans-serif;
+<title>
+  Test Report - ${projectName}
+</title>
 
-      max-width: 600px;
-      margin: 0 auto;
-      padding: 20px;
+<style>
 
-      background: #f8fafc;
-      color: #1e293b;
-    }
+body {
+  font-family:
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    Roboto,
+    Arial,
+    sans-serif;
 
-    .header {
-      background: linear-gradient(
-        135deg,
-        #4f46e5,
-        #7c3aed
-      );
+  max-width: 600px;
 
-      color: white;
-      padding: 30px;
-      text-align: center;
+  margin: 0 auto;
 
-      border-radius: 12px 12px 0 0;
-    }
+  padding: 20px;
 
-    .header h1 {
-      margin: 0;
-      font-size: 24px;
-    }
+  background: #f8fafc;
 
-    .header p {
-      margin: 8px 0 0;
-      opacity: 0.9;
-    }
+  color: #1e293b;
+}
 
-    .content {
-      background: white;
-      padding: 30px;
+.header {
+  background:
+    linear-gradient(
+      135deg,
+      #4f46e5,
+      #7c3aed
+    );
 
-      border-radius: 0 0 12px 12px;
+  color: white;
 
-      box-shadow:
-        0 4px 6px rgba(0, 0, 0, 0.05);
-    }
+  padding: 30px;
 
-    .summary-box {
-      background: #f1f5f9;
-      padding: 20px;
+  text-align: center;
 
-      border-radius: 8px;
-      margin: 16px 0;
+  border-radius:
+    12px 12px 0 0;
+}
 
-      text-align: center;
-    }
+.header h1 {
+  margin: 0;
 
-    .big-number {
-      font-size: 36px;
-      font-weight: bold;
-      color: #4f46e5;
-    }
+  font-size: 24px;
+}
 
-    .stats {
-      display: grid;
-      grid-template-columns: repeat(2, 1fr);
-      gap: 12px;
+.header p {
+  margin: 8px 0 0;
 
-      margin: 20px 0;
-    }
+  opacity: 0.9;
+}
 
-    .stat {
-      background: #f8fafc;
-      padding: 15px;
+.content {
+  background: white;
 
-      border-radius: 8px;
-      text-align: center;
+  padding: 30px;
 
-      border: 1px solid #e2e8f0;
-    }
+  border-radius:
+    0 0 12px 12px;
 
-    .number {
-      font-size: 28px;
-      font-weight: bold;
-    }
+  box-shadow:
+    0 4px 6px rgba(0,0,0,0.05);
+}
 
-    .label {
-      color: #64748b;
-      font-size: 13px;
-      margin-top: 4px;
-    }
+.summary-box {
+  background: #f1f5f9;
 
-    .text-pass {
-      color: #22c55e;
-    }
+  padding: 20px;
 
-    .text-fail {
-      color: #ef4444;
-    }
+  border-radius: 8px;
 
-    .text-error {
-      color: #f59e0b;
-    }
+  margin: 16px 0;
 
-    .text-rate {
-      color: #3b82f6;
-    }
+  text-align: center;
+}
 
-    .buttons {
-      text-align: center;
-      margin: 24px 0;
-    }
+.big-number {
+  font-size: 36px;
 
-    .btn {
-      display: inline-block;
+  font-weight: bold;
 
-      background: #4f46e5;
-      color: white;
+  color: #4f46e5;
 
-      padding: 10px 24px;
+  margin: 8px 0;
+}
 
-      text-decoration: none;
-      border-radius: 8px;
+.stats {
+  display: grid;
 
-      margin: 4px;
-    }
+  grid-template-columns:
+    repeat(2, 1fr);
 
-    .btn-outline {
-      background: white;
-      border: 2px solid #4f46e5;
-      color: #4f46e5;
-    }
+  gap: 12px;
 
-    .footer {
-      text-align: center;
-      color: #94a3b8;
+  margin: 20px 0;
+}
 
-      font-size: 12px;
+.stat {
+  background: #f8fafc;
 
-      margin-top: 20px;
-      padding-top: 20px;
+  padding: 15px;
 
-      border-top: 1px solid #e2e8f0;
-    }
-  </style>
+  border-radius: 8px;
+
+  text-align: center;
+
+  border:
+    1px solid #e2e8f0;
+}
+
+.number {
+  font-size: 28px;
+
+  font-weight: bold;
+}
+
+.label {
+  color: #64748b;
+
+  font-size: 13px;
+
+  margin-top: 4px;
+}
+
+.text-pass {
+  color: #22c55e;
+}
+
+.text-fail {
+  color: #ef4444;
+}
+
+.text-error {
+  color: #f59e0b;
+}
+
+.text-rate {
+  color: #3b82f6;
+}
+
+.btn {
+  display: inline-block;
+
+  background: #4f46e5;
+
+  color: white !important;
+
+  padding: 12px 24px;
+
+  text-decoration: none;
+
+  border-radius: 8px;
+
+  margin: 5px;
+
+  font-weight: 600;
+}
+
+.btn-outline {
+  background: white;
+
+  color: #4f46e5 !important;
+
+  border:
+    2px solid #4f46e5;
+}
+
+.footer {
+  text-align: center;
+
+  color: #94a3b8;
+
+  font-size: 12px;
+
+  margin-top: 20px;
+
+  padding-top: 20px;
+
+  border-top:
+    1px solid #e2e8f0;
+}
+
+</style>
+
 </head>
+
 
 <body>
 
-  <div class="header">
-    <h1>🚀 ${projectName}</h1>
-    <p>Test Execution Report</p>
-  </div>
 
-  <div class="content">
+<div class="header">
 
-    <p style="font-size: 14px; color: #64748b;">
-      📅 ${new Date().toLocaleString()}
-    </p>
+  <h1>
+    🚀 ${projectName}
+  </h1>
 
-    <div class="summary-box">
+  <p>
+    Test Execution Report
+  </p>
 
-      <div
-        style="
-          font-size: 14px;
-          color: #64748b;
-        "
-      >
-        Overall Status
-      </div>
+</div>
 
-      <div class="big-number">
-        ${statusIcon} ${summary.successRate || '0%'}
-      </div>
 
-      <div
-        style="
-          font-size: 13px;
-          color: #64748b;
-        "
-      >
-        ${summary.passed || 0} passed ·
-        ${summary.failed || 0} failed ·
-        ${summary.errors || 0} errors
-      </div>
+<div class="content">
 
-    </div>
 
-    <div class="stats">
+  <p
+    style="
+      font-size:14px;
+      color:#64748b;
+      margin-bottom:16px;
+    "
+  >
+    📅 ${new Date().toLocaleString()}
+  </p>
 
-      <div class="stat">
-        <div class="number text-pass">
-          ${summary.passed || 0}
-        </div>
 
-        <div class="label">
-          ✅ Passed
-        </div>
-      </div>
-
-      <div class="stat">
-        <div class="number text-fail">
-          ${summary.failed || 0}
-        </div>
-
-        <div class="label">
-          ❌ Failed
-        </div>
-      </div>
-
-      <div class="stat">
-        <div class="number text-error">
-          ${summary.errors || 0}
-        </div>
-
-        <div class="label">
-          ⚠️ Errors
-        </div>
-      </div>
-
-      <div class="stat">
-        <div class="number text-rate">
-          ${summary.successRate || '0%'}
-        </div>
-
-        <div class="label">
-          📈 Success Rate
-        </div>
-      </div>
-
-    </div>
+  <div class="summary-box">
 
     <div
       style="
-        margin: 16px 0;
-        padding: 12px;
-        background: #f8fafc;
-        border-radius: 8px;
-        font-size: 13px;
+        font-size:14px;
+        color:#64748b;
       "
     >
-      <strong>⏱️ Duration:</strong>
-      ${summary.duration || 'N/A'}
-      <br><br>
-
-      <strong>⚡ Avg Response:</strong>
-      ${summary.avgResponseTime || 'N/A'}
-      <br><br>
-
-      <strong>🧪 Total Tests:</strong>
-      ${summary.total || 0}
+      Overall Status
     </div>
 
+
+    <div class="big-number">
+
+      ${statusIcon}
+      ${successRate}%
+
+    </div>
+
+
+    <div
+      style="
+        font-size:13px;
+        color:#64748b;
+      "
+    >
+
+      ${summary.passed || 0}
+      passed ·
+
+      ${summary.failed || 0}
+      failed ·
+
+      ${summary.errors || 0}
+      errors
+
+    </div>
+
+  </div>
+
+
+  <div class="stats">
+
+
+    <div class="stat">
+
+      <div class="number text-pass">
+
+        ${summary.passed || 0}
+
+      </div>
+
+      <div class="label">
+
+        ✅ Passed
+
+      </div>
+
+    </div>
+
+
+    <div class="stat">
+
+      <div class="number text-fail">
+
+        ${summary.failed || 0}
+
+      </div>
+
+      <div class="label">
+
+        ❌ Failed
+
+      </div>
+
+    </div>
+
+
+    <div class="stat">
+
+      <div class="number text-error">
+
+        ${summary.errors || 0}
+
+      </div>
+
+      <div class="label">
+
+        ⚠️ Errors
+
+      </div>
+
+    </div>
+
+
+    <div class="stat">
+
+      <div class="number text-rate">
+
+        ${successRate}%
+
+      </div>
+
+      <div class="label">
+
+        📈 Success Rate
+
+      </div>
+
+    </div>
+
+
+  </div>
+
+
+  <div
+    style="
+      margin:16px 0;
+      padding:12px;
+      background:#f8fafc;
+      border-radius:8px;
+    "
+  >
+
+    <div
+      style="
+        font-size:13px;
+        color:#475569;
+        line-height:1.8;
+      "
+    >
+
+      <div>
+        <strong>⏱️ Duration:</strong>
+        ${summary.duration || 'N/A'}
+      </div>
+
+      <div>
+        <strong>⚡ Avg Response:</strong>
+        ${summary.avgResponseTime || 'N/A'}
+      </div>
+
+      <div>
+        <strong>🧪 Total Tests:</strong>
+        ${summary.total || 0}
+      </div>
+
+    </div>
+
+  </div>
+
+
+  <div
+    style="
+      text-align:center;
+      margin:24px 0;
+    "
+  >
+
+
     ${
-      htmlUrl || pdfUrl
+      htmlUrl
         ? `
-          <div class="buttons">
-
-            ${
-              htmlUrl
-                ? `
-                  <a
-                    href="${htmlUrl}"
-                    class="btn"
-                  >
-                    📊 View HTML Report
-                  </a>
-                `
-                : ''
-            }
-
-            ${
-              pdfUrl
-                ? `
-                  <a
-                    href="${pdfUrl}"
-                    class="btn btn-outline"
-                  >
-                    📄 Download PDF
-                  </a>
-                `
-                : ''
-            }
-
-          </div>
+          <a
+            href="${htmlUrl}"
+            class="btn"
+          >
+            📊 View HTML Report
+          </a>
         `
         : ''
     }
 
-    <div
-      style="
-        font-size: 12px;
-        color: #94a3b8;
-        text-align: center;
-        margin-top: 16px;
-      "
-    >
-      Generated by
-      <strong>AI API Testing Platform</strong>
-    </div>
+
+    ${
+      pdfUrl
+        ? `
+          <a
+            href="${pdfUrl}"
+            class="btn btn-outline"
+          >
+            📄 Download PDF
+          </a>
+        `
+        : ''
+    }
+
 
   </div>
 
-  <div class="footer">
+
+  <div
+    style="
+      font-size:12px;
+      color:#94a3b8;
+      text-align:center;
+      margin-top:16px;
+    "
+  >
+
     <p>
-      © ${new Date().getFullYear()}
-      AI API Testing Platform
+      Generated by
+      <strong>
+        AI API Testing Platform
+      </strong>
     </p>
+
   </div>
+
+
+</div>
+
+
+<div class="footer">
+
+  <p>
+    © ${new Date().getFullYear()}
+    AI API Testing Platform
+  </p>
+
+</div>
+
 
 </body>
+
 </html>
 `;
 
-    // --------------------------------------------------
-    // Send to every recipient
-    // --------------------------------------------------
+
+    // ====================================================
+    // SEND TO EACH RECIPIENT
+    // ====================================================
 
     const results = [];
 
+
     for (const email of validEmails) {
-      const result = await sendEmail({
-        to: email,
 
-        subject:
-          `📊 Test Report: ${projectName} - ${new Date().toLocaleDateString()}`,
+      console.log(
+        '📧 Sending report to:',
+        email
+      );
 
-        html
-      });
+
+      const result =
+        await sendEmail({
+
+          to: email,
+
+          subject:
+            `📊 Test Report: ${projectName} - ${new Date().toLocaleDateString()}`,
+
+          html,
+
+          text:
+            `Test Report for ${projectName}\n\n` +
+            `Passed: ${summary.passed || 0}\n` +
+            `Failed: ${summary.failed || 0}\n` +
+            `Errors: ${summary.errors || 0}\n` +
+            `Success Rate: ${successRate}%`,
+
+          attachments: []
+        });
+
 
       results.push({
         email,
@@ -719,52 +1095,85 @@ export const sendTestReportEmail = async ({
       });
     }
 
-    const successful = results.filter(
-      result => result.success
+
+    // ====================================================
+    // RESULTS
+    // ====================================================
+
+    const successful =
+      results.filter(
+        (result) => result.success
+      );
+
+
+    const failed =
+      results.filter(
+        (result) => !result.success
+      );
+
+
+    console.log(
+      '📧 Successful:',
+      successful.length
     );
 
-    const failed = results.filter(
-      result => !result.success
+    console.log(
+      '📧 Failed:',
+      failed.length
     );
 
-    console.log('========================================');
-    console.log('📊 REPORT EMAIL RESULT');
-    console.log('========================================');
-    console.log('📧 Total:', results.length);
-    console.log('✅ Successful:', successful.length);
-    console.log('❌ Failed:', failed.length);
-    console.log('========================================');
 
     return {
-      success: successful.length > 0,
+
+      success:
+        successful.length > 0,
 
       results,
 
-      sentCount: successful.length,
+      sentCount:
+        successful.length,
 
-      totalCount: results.length,
+      totalCount:
+        results.length,
 
-      failedCount: failed.length,
+      failedCount:
+        failed.length,
 
-      failedEmails: failed.map(
-        result => result.email
-      )
+      failedEmails:
+        failed.map(
+          (result) =>
+            result.email
+        )
     };
 
+
   } catch (error) {
+
     console.error(
       '❌ Send report email error:',
-      error.message
+      error
     );
 
+
     return {
+
       success: false,
+
       error:
-        error.message ||
-        'Failed to send report email'
+        error?.message ||
+        'Failed to send report email',
+
+      code:
+        error?.code ||
+        null,
+
+      responseCode:
+        error?.responseCode ||
+        null
     };
   }
 };
+
 
 // ======================================================
 // SEND WELCOME EMAIL
@@ -774,165 +1183,230 @@ export const sendWelcomeEmail = async ({
   to,
   name
 }) => {
+
   try {
+
     if (!to) {
+
       return {
         success: false,
         error: 'Recipient email is required'
       };
     }
 
+
     const frontendUrl =
       process.env.FRONTEND_URL ||
-      'http://localhost:5173';
+      'http://localhost:5174';
+
 
     const html = `
 <!DOCTYPE html>
 
-<html lang="en">
+<html>
 
 <head>
-  <meta charset="UTF-8">
 
-  <meta
-    name="viewport"
-    content="width=device-width, initial-scale=1.0"
-  >
+<meta charset="UTF-8">
 
-  <style>
-    body {
-      font-family:
-        -apple-system,
-        BlinkMacSystemFont,
-        "Segoe UI",
-        Roboto,
-        sans-serif;
+<meta
+  name="viewport"
+  content="width=device-width, initial-scale=1.0"
+/>
 
-      max-width: 500px;
-      margin: 0 auto;
-      padding: 20px;
+<style>
 
-      background: #f8fafc;
-    }
+body {
+  font-family:
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    Roboto,
+    Arial,
+    sans-serif;
 
-    .container {
-      background: white;
-      padding: 30px;
+  max-width: 500px;
 
-      border-radius: 12px;
+  margin: 0 auto;
 
-      box-shadow:
-        0 2px 10px rgba(0,0,0,0.1);
-    }
+  padding: 20px;
 
-    .header {
-      text-align: center;
-    }
+  background: #f8fafc;
+}
 
-    .header h1 {
-      color: #1e293b;
-    }
+.container {
+  background: white;
 
-    .btn {
-      display: inline-block;
+  padding: 30px;
 
-      background: #4f46e5;
-      color: white;
+  border-radius: 12px;
 
-      padding: 10px 24px;
+  box-shadow:
+    0 2px 10px rgba(0,0,0,0.1);
+}
 
-      text-decoration: none;
-      border-radius: 8px;
-    }
+.header {
+  text-align: center;
+}
 
-    .footer {
-      text-align: center;
-      color: #94a3b8;
+.header h1 {
+  color: #1e293b;
+}
 
-      font-size: 12px;
+.btn {
+  display: inline-block;
 
-      margin-top: 20px;
-    }
-  </style>
+  background: #4f46e5;
+
+  color: white !important;
+
+  padding: 10px 24px;
+
+  text-decoration: none;
+
+  border-radius: 8px;
+}
+
+.footer {
+  text-align: center;
+
+  color: #94a3b8;
+
+  font-size: 12px;
+
+  margin-top: 20px;
+}
+
+</style>
+
 </head>
+
 
 <body>
 
-  <div class="container">
 
-    <div class="header">
-      <h1>
-        🚀 Welcome to AI API Testing Platform!
-      </h1>
-    </div>
+<div class="container">
 
-    <p>
-      Hi <strong>${name || 'User'}</strong>,
-    </p>
 
-    <p>
-      We're excited to have you on board! 🎉
-    </p>
+  <div class="header">
 
-    <p>
-      With our platform, you can:
-    </p>
-
-    <ul>
-      <li>🤖 Generate AI-powered test cases</li>
-      <li>🧪 Run automated API tests</li>
-      <li>📊 View detailed test reports</li>
-      <li>🔗 Integrate with GitHub</li>
-    </ul>
-
-    <div
-      style="
-        text-align: center;
-        margin: 24px 0;
-      "
-    >
-      <a
-        href="${frontendUrl}/dashboard"
-        class="btn"
-      >
-        Get Started
-      </a>
-    </div>
-
-    <div class="footer">
-      <p>
-        © ${new Date().getFullYear()}
-        AI API Testing Platform
-      </p>
-    </div>
+    <h1>
+      🚀 Welcome to AI API Testing Platform!
+    </h1>
 
   </div>
+
+
+  <p>
+    Hi <strong>${name || 'User'}</strong>,
+  </p>
+
+
+  <p>
+    We're excited to have you on board! 🎉
+  </p>
+
+
+  <p>
+    With our platform, you can:
+  </p>
+
+
+  <ul>
+
+    <li>
+      🤖 Generate AI-powered test cases
+    </li>
+
+    <li>
+      🧪 Run automated API tests
+    </li>
+
+    <li>
+      📊 View detailed test reports
+    </li>
+
+    <li>
+      🔗 Integrate with GitHub
+    </li>
+
+  </ul>
+
+
+  <div
+    style="
+      text-align:center;
+      margin:24px 0;
+    "
+  >
+
+    <a
+      href="${frontendUrl}/dashboard"
+      class="btn"
+    >
+      Get Started
+    </a>
+
+  </div>
+
+
+  <div class="footer">
+
+    <p>
+      © ${new Date().getFullYear()}
+      AI API Testing Platform
+    </p>
+
+  </div>
+
+
+</div>
+
 
 </body>
 
 </html>
 `;
 
-    return await sendEmail({
-      to,
 
-      subject:
-        '🚀 Welcome to AI API Testing Platform!',
+    const result =
+      await sendEmail({
 
-      html
-    });
+        to,
+
+        subject:
+          '🚀 Welcome to AI API Testing Platform!',
+
+        html
+      });
+
+
+    return result;
+
 
   } catch (error) {
+
     console.error(
       '❌ Send welcome email error:',
-      error.message
+      error
     );
 
+
     return {
+
       success: false,
+
       error:
-        error.message ||
-        'Failed to send welcome email'
+        error?.message ||
+        'Failed to send welcome email',
+
+      code:
+        error?.code ||
+        null,
+
+      responseCode:
+        error?.responseCode ||
+        null
     };
   }
 };
