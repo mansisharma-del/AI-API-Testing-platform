@@ -9,13 +9,11 @@ import reportRoutes from './api/reports/reports.routes.js';
 import emailRoutes from './api/email/email.routes.js';
 
 import { errorHandler } from './core/middlewares/error.middleware.js';
-import config from './core/config/index.js';
 
 const app = express();
 
-
 // ======================================================
-// CORS
+// CORS CONFIGURATION
 // ======================================================
 
 const allowedOrigins = [
@@ -27,8 +25,8 @@ const allowedOrigins = [
 app.use(
   cors({
     origin: function (origin, callback) {
-      // Allow requests without an Origin header
-      // (Postman, server-to-server, health checks, etc.)
+      // Allow requests without Origin
+      // Postman, curl, server-to-server etc.
       if (!origin) {
         return callback(null, true);
       }
@@ -38,7 +36,8 @@ app.use(
       }
 
       console.log('❌ CORS blocked origin:', origin);
-      return callback(new Error('Not allowed by CORS'));
+
+      return callback(new Error(`CORS blocked origin: ${origin}`));
     },
 
     credentials: true,
@@ -47,30 +46,43 @@ app.use(
       'GET',
       'POST',
       'PUT',
-      'DELETE',
       'PATCH',
+      'DELETE',
       'OPTIONS'
     ],
 
+    // IMPORTANT:
+    // Browser screenshot showed Cache-Control / Pragma
+    // in the request headers.
     allowedHeaders: [
       'Content-Type',
       'Authorization',
       'X-Requested-With',
       'Accept',
-      'Cache-Control'
-    ]
+      'Cache-Control',
+      'Pragma',
+      'Expires'
+    ],
+
+    optionsSuccessStatus: 204
   })
 );
 
-
 // ======================================================
-// MIDDLEWARE
+// SECURITY
 // ======================================================
 
 app.use(helmet());
 
-app.use(express.json());
+// ======================================================
+// BODY PARSER
+// ======================================================
 
+app.use(
+  express.json({
+    limit: '10mb'
+  })
+);
 
 // ======================================================
 // API ROUTES
@@ -86,32 +98,29 @@ app.use('/api/v1/reports', reportRoutes);
 
 app.use('/api/v1/email', emailRoutes);
 
-
 // ======================================================
 // HEALTH CHECK
 // ======================================================
 
 app.get('/health', (req, res) => {
-  res.json({
+  res.status(200).json({
     status: 'healthy',
     message: 'Backend is running',
     timestamp: new Date().toISOString()
   });
 });
 
-
 // ======================================================
 // ROOT
 // ======================================================
 
 app.get('/', (req, res) => {
-  res.json({
+  res.status(200).json({
     name: 'AI API Testing Platform',
     version: '1.0.0',
     status: 'online'
   });
 });
-
 
 // ======================================================
 // ERROR HANDLER
@@ -119,6 +128,5 @@ app.get('/', (req, res) => {
 // ======================================================
 
 app.use(errorHandler);
-
 
 export default app;
