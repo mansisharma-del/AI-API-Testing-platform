@@ -1,17 +1,20 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import React, { useCallback, useEffect, useState } from 'react';
+import { Link, useParams } from 'react-router-dom';
 import {
   ArrowLeft,
   FileText,
   File,
   Mail,
   RefreshCw,
-  Loader
+  Loader,
+  Play,
 } from 'lucide-react';
 import toast, { Toaster } from 'react-hot-toast';
 
+import { getProject } from '../services/project.service.js';
+
 // ============================================================
-// API BASE URL
+// API CONFIG
 // ============================================================
 
 const API_BASE_URL = (
@@ -19,15 +22,13 @@ const API_BASE_URL = (
   'https://ai-api-testing-platform.onrender.com/api/v1'
 ).replace(/\/+$/, '');
 
-
 // ============================================================
-// GET AUTH TOKEN
+// AUTH
 // ============================================================
 
 const getToken = () => {
   return localStorage.getItem('token');
 };
-
 
 // ============================================================
 // SAFE RESPONSE PARSER
@@ -44,11 +45,42 @@ const parseResponse = async (response) => {
     return JSON.parse(text);
   } catch {
     return {
-      error: text
+      error: text,
     };
   }
 };
 
+// ============================================================
+// REPORT EXTRACTION
+// ============================================================
+
+const extractReport = (data) => {
+  if (!data) {
+    return null;
+  }
+
+  // { success: true, report: {...} }
+  if (data.success && data.report) {
+    return data.report;
+  }
+
+  // { report: {...} }
+  if (data.report) {
+    return data.report;
+  }
+
+  // Some APIs return the report directly
+  if (
+    data.summary ||
+    data.results ||
+    data.projectName ||
+    data.testResults
+  ) {
+    return data;
+  }
+
+  return null;
+};
 
 // ============================================================
 // REPORTS PAGE
@@ -59,6 +91,7 @@ const ReportsPage = () => {
 
   const [loading, setLoading] = useState(true);
   const [report, setReport] = useState(null);
+  const [project, setProject] = useState(null);
   const [error, setError] = useState('');
 
   const [email, setEmail] = useState('');
@@ -67,10 +100,9 @@ const ReportsPage = () => {
   const [downloadingHTML, setDownloadingHTML] = useState(false);
   const [downloadingPDF, setDownloadingPDF] = useState(false);
 
-
-  // ============================================================
+  // ==========================================================
   // FETCH REPORT
-  // ============================================================
+  // ==========================================================
 
   const fetchReport = useCallback(async () => {
     if (!id) {
@@ -79,119 +111,234 @@ const ReportsPage = () => {
       return;
     }
 
+    const token = getToken();
+
+    if (!token) {
+      setError('Please login first.');
+      toast.error('Please login first.');
+      setLoading(false);
+      return;
+    }
+
     try {
       setLoading(true);
       setError('');
 
-      const token = getToken();
+      // ------------------------------------------------------
+      // STEP 1: GET PROJECT
+      // ------------------------------------------------------
 
-      if (!token) {
-        setError('Please login first.');
-        toast.error('Please login first.');
-        return;
+      console.log('📦 Getting project:', id);
+
+      const projectData = await getProject(id);
+
+      console.log('📦 Project response:', projectData);
+
+      const loadedProject =
+        projectData?.project ||
+        projectData?.data ||
+        null;
+
+      setProject(loadedProject);
+
+      // ------------------------------------------------------
+      // STEP 2: CHECK WHETHER PROJECT ALREADY CONTAINS REPORT
+      // ------------------------------------------------------
+
+      if (loadedProject) {
+        const projectReport =
+          loadedProject.report ||
+          loadedProject.testReport ||
+          loadedProject.latestReport ||
+          loadedProject.testResult ||
+          null;
+
+        if (projectReport) {
+          console.log(
+            '✅ Report found inside project response'
+          );
+
+          const extracted = extractReport(projectReport);
+
+          if (extracted) {
+            setReport(extracted);
+            setError('');
+            setLoading(false);
+            return;
+          }
+        }
+
+        // Some project objects contain test suites/results.
+        // If there is a completed test run, construct a report
+        // from those values.
+
+        const testSuite =
+          Array.isArray(loadedProject.testSuites) &&
+          loadedProject.testSuites.length > 0
+            ? loadedProject.testSuites[
+                loadedProject.testSuites.length - 1
+              ]
+            : null;
+
+        if (testSuite) {
+          const hasResults =
+            Array.isArray(testSuite.results) &&
+            testSuite.results.length > 0;
+
+          const hasTestCases =
+            Array.isArray(testSuite.testCases) &&
+            testSuite.testCases.length > 0;
+
+          if (hasResults || hasTestCases) {
+            const generatedReport = {
+              projectName: loadedProject.name,
+              summary: {
+                passed:
+                  Number(testSuite.passedTests) || 0,
+
+                failed:
+                  Number(testSuite.failedTests) || 0,
+
+                errors:
+                  Number(testSuite.errors) || 0,
+
+                successRate:
+                  Number(testSuite.successRate) || 0,
+              },
+
+              results:
+                testSuite.results ||
+                testSuite.testCases ||
+                [],
+            };
+
+            console.log(
+              '✅ Constructed report from project testSuite:',
+              generatedReport
+            );
+
+            setReport(generatedReport);
+            setError('');
+            setLoading(false);
+            return;
+          }
+        }
       }
 
-      // Cache-busting is important because Render/browser was
-      // returning 304 Not Modified for the report request.
-      const url = `${API_BASE_URL}/reports/${id}?_=${Date.now()}`;
+      // ------------------------------------------------------
+      // STEP 3: CALL REPORT API
+      // ------------------------------------------------------
 
-      console.log('📊 Fetch report URL:', url);
-      console.log('📊 Project ID:', id);
+      const reportUrl =
+        `${API_BASE_URL}/reports/${id}?_=${Date.now()}`;
 
-      const response = await fetch(url, {
+      console.log(
+        '📊 Fetching report URL:',
+        reportUrl
+      );
+
+      const response = await fetch(reportUrl, {
         method: 'GET',
 
-        // Prevent browser from using cached 304 response.
         cache: 'no-store',
 
         headers: {
           Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json',
-          'Cache-Control': 'no-cache',
-          Pragma: 'no-cache'
-        }
+          Accept: 'application/json',
+          'Cache-Control': 'no-cache, no-store, max-age=0',
+          Pragma: 'no-cache',
+        },
       });
 
-      console.log('📊 Report HTTP status:', response.status);
+      console.log(
+        '📊 Report HTTP status:',
+        response.status
+      );
 
       const data = await parseResponse(response);
 
-      console.log('📊 Report response:', data);
+      console.log(
+        '📊 Report API response:',
+        data
+      );
 
-      // --------------------------------------------------------
+      // ------------------------------------------------------
       // HTTP ERROR
-      // --------------------------------------------------------
+      // ------------------------------------------------------
 
       if (!response.ok) {
-        const message =
-          data.error ||
-          data.message ||
-          data.detail ||
+        let message =
+          data?.error ||
+          data?.message ||
+          data?.detail ||
           `Failed to fetch report (${response.status})`;
+
+        if (response.status === 404) {
+          message =
+            'No report exists yet. Run the tests successfully first.';
+        }
+
+        if (response.status === 401) {
+          message =
+            'Your session has expired. Please login again.';
+        }
+
+        if (response.status === 403) {
+          message =
+            'You are not allowed to view this report.';
+        }
 
         setError(message);
 
-        if (response.status === 404) {
-          toast.error('No report found. Run tests first.');
-        } else if (response.status === 401) {
-          toast.error('Session expired. Please login again.');
-        } else if (response.status === 403) {
-          toast.error('You are not allowed to view this report.');
-        } else {
-          toast.error(message);
-        }
+        toast.error(message);
 
         return;
       }
 
-      // --------------------------------------------------------
-      // SUCCESSFUL RESPONSE
-      // --------------------------------------------------------
+      // ------------------------------------------------------
+      // EXTRACT REPORT
+      // ------------------------------------------------------
 
-      if (data.success && data.report) {
-        setReport(data.report);
+      const extractedReport = extractReport(data);
+
+      if (extractedReport) {
+        console.log(
+          '✅ Report successfully loaded:',
+          extractedReport
+        );
+
+        setReport(extractedReport);
         setError('');
         return;
       }
 
-      // Some backend implementations return:
-      // { report: {...} }
-      if (data.report) {
-        setReport(data.report);
-        setError('');
-        return;
-      }
-
-      // Some APIs may return the report object directly.
-      if (
-        data.summary ||
-        data.results ||
-        data.projectName
-      ) {
-        setReport(data);
-        setError('');
-        return;
-      }
-
-      const message =
-        data.error ||
-        data.message ||
-        'No report found. Run tests first.';
-
-      setError(message);
-      toast.error(message);
-
-    } catch (err) {
-      console.error('❌ Fetch report error:', err);
+      // ------------------------------------------------------
+      // NO REPORT
+      // ------------------------------------------------------
 
       setError(
-        err.message ||
+        'No report data was returned by the backend. Run tests first.'
+      );
+
+      toast.error(
+        'No report data was returned by the backend.'
+      );
+
+    } catch (err) {
+      console.error(
+        '❌ Fetch report error:',
+        err
+      );
+
+      setError(
+        err?.message ||
         'Failed to connect to the backend.'
       );
 
       toast.error(
-        err.message ||
-        'Failed to fetch report'
+        err?.message ||
+        'Failed to fetch report.'
       );
 
     } finally {
@@ -199,37 +346,40 @@ const ReportsPage = () => {
     }
   }, [id]);
 
-
-  // ============================================================
-  // LOAD REPORT WHEN PAGE OPENS
-  // ============================================================
+  // ==========================================================
+  // LOAD REPORT
+  // ==========================================================
 
   useEffect(() => {
-    if (id) {
-      fetchReport();
+    fetchReport();
+  }, [fetchReport]);
+
+  // ==========================================================
+  // DOWNLOAD HELPER
+  // ==========================================================
+
+  const downloadFile = async (
+    endpoint,
+    filename,
+    setDownloading
+  ) => {
+    const token = getToken();
+
+    if (!token) {
+      toast.error('Please login first.');
+      return;
     }
-  }, [id, fetchReport]);
 
-
-  // ============================================================
-  // DOWNLOAD HTML REPORT
-  // ============================================================
-
-  const downloadHTML = async () => {
     try {
-      setDownloadingHTML(true);
-
-      const token = getToken();
-
-      if (!token) {
-        toast.error('Please login first');
-        return;
-      }
+      setDownloading(true);
 
       const url =
-        `${API_BASE_URL}/reports/${id}/html?_=${Date.now()}`;
+        `${API_BASE_URL}${endpoint}?_=${Date.now()}`;
 
-      console.log('📄 Download HTML URL:', url);
+      console.log(
+        '⬇️ Download URL:',
+        url
+      );
 
       const response = await fetch(url, {
         method: 'GET',
@@ -237,195 +387,166 @@ const ReportsPage = () => {
         headers: {
           Authorization: `Bearer ${token}`,
           'Cache-Control': 'no-cache',
-          Pragma: 'no-cache'
-        }
+          Pragma: 'no-cache',
+        },
       });
 
       if (!response.ok) {
         const data = await parseResponse(response);
 
         throw new Error(
-          data.error ||
-          data.message ||
-          `Failed to download HTML (${response.status})`
+          data?.error ||
+          data?.message ||
+          `Download failed (${response.status})`
         );
       }
 
       const blob = await response.blob();
 
-      const downloadUrl =
+      const blobUrl =
         window.URL.createObjectURL(blob);
 
-      const link = document.createElement('a');
+      const link =
+        document.createElement('a');
 
-      link.href = downloadUrl;
-      link.download = `report-${id}.html`;
+      link.href = blobUrl;
+      link.download = filename;
 
       document.body.appendChild(link);
       link.click();
       link.remove();
 
-      window.URL.revokeObjectURL(downloadUrl);
+      window.URL.revokeObjectURL(blobUrl);
 
-      toast.success('HTML report downloaded!');
+      toast.success(
+        `${filename} downloaded successfully!`
+      );
 
-    } catch (error) {
-      console.error('❌ Download HTML error:', error);
+    } catch (err) {
+      console.error(
+        '❌ Download error:',
+        err
+      );
 
       toast.error(
-        error.message ||
-        'Failed to download HTML report'
+        err?.message ||
+        'Failed to download report.'
       );
 
     } finally {
-      setDownloadingHTML(false);
+      setDownloading(false);
     }
   };
 
+  // ==========================================================
+  // DOWNLOAD HTML
+  // ==========================================================
 
-  // ============================================================
-  // DOWNLOAD PDF REPORT
-  // ============================================================
-
-  const downloadPDF = async () => {
-    try {
-      setDownloadingPDF(true);
-
-      const token = getToken();
-
-      if (!token) {
-        toast.error('Please login first');
-        return;
-      }
-
-      const url =
-        `${API_BASE_URL}/reports/${id}/pdf?_=${Date.now()}`;
-
-      console.log('📄 Download PDF URL:', url);
-
-      const response = await fetch(url, {
-        method: 'GET',
-        cache: 'no-store',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Cache-Control': 'no-cache',
-          Pragma: 'no-cache'
-        }
-      });
-
-      if (!response.ok) {
-        const data = await parseResponse(response);
-
-        throw new Error(
-          data.error ||
-          data.message ||
-          `Failed to download PDF (${response.status})`
-        );
-      }
-
-      const blob = await response.blob();
-
-      const downloadUrl =
-        window.URL.createObjectURL(blob);
-
-      const link = document.createElement('a');
-
-      link.href = downloadUrl;
-      link.download = `report-${id}.pdf`;
-
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-
-      window.URL.revokeObjectURL(downloadUrl);
-
-      toast.success('PDF report downloaded!');
-
-    } catch (error) {
-      console.error('❌ Download PDF error:', error);
-
-      toast.error(
-        error.message ||
-        'Failed to download PDF report'
-      );
-
-    } finally {
-      setDownloadingPDF(false);
-    }
+  const downloadHTML = () => {
+    downloadFile(
+      `/reports/${id}/html`,
+      `report-${id}.html`,
+      setDownloadingHTML
+    );
   };
 
+  // ==========================================================
+  // DOWNLOAD PDF
+  // ==========================================================
 
-  // ============================================================
-  // SEND REPORT BY EMAIL
-  // ============================================================
+  const downloadPDF = () => {
+    downloadFile(
+      `/reports/${id}/pdf`,
+      `report-${id}.pdf`,
+      setDownloadingPDF
+    );
+  };
+
+  // ==========================================================
+  // SEND EMAIL
+  // ==========================================================
 
   const sendEmailReport = async () => {
     if (!email.trim()) {
-      toast.error('Please enter email address');
+      toast.error(
+        'Please enter an email address.'
+      );
+      return;
+    }
+
+    const token = getToken();
+
+    if (!token) {
+      toast.error('Please login first.');
       return;
     }
 
     try {
       setSending(true);
 
-      const token = getToken();
-
-      if (!token) {
-        toast.error('Please login first');
-        return;
-      }
-
       const url =
         `${API_BASE_URL}/email/report/${id}`;
 
-      console.log('📧 Email report URL:', url);
+      console.log(
+        '📧 Email report URL:',
+        url
+      );
 
       const response = await fetch(url, {
         method: 'POST',
 
         headers: {
-          'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
-          'Cache-Control': 'no-cache',
-          Pragma: 'no-cache'
+          'Content-Type': 'application/json',
         },
 
         body: JSON.stringify({
-          email: email.trim()
-        })
+          email: email.trim(),
+        }),
       });
 
-      const data = await parseResponse(response);
+      const data =
+        await parseResponse(response);
 
-      console.log('📧 Email response:', data);
+      console.log(
+        '📧 Email response:',
+        data
+      );
 
       if (!response.ok) {
         throw new Error(
-          data.error ||
-          data.message ||
-          data.detail ||
-          `Request failed (${response.status})`
+          data?.error ||
+          data?.message ||
+          data?.detail ||
+          `Email request failed (${response.status})`
         );
       }
 
-      if (data.success) {
-        toast.success('📧 Report sent successfully!');
+      if (
+        data.success ||
+        data.message
+      ) {
+        toast.success(
+          '📧 Report sent successfully!'
+        );
 
         setEmail('');
       } else {
         toast.error(
-          data.error ||
-          data.message ||
-          'Failed to send email'
+          data?.error ||
+          'Failed to send report.'
         );
       }
 
-    } catch (error) {
-      console.error('❌ Send email error:', error);
+    } catch (err) {
+      console.error(
+        '❌ Email report error:',
+        err
+      );
 
       toast.error(
-        error.message ||
-        'Failed to send email'
+        err?.message ||
+        'Failed to send email report.'
       );
 
     } finally {
@@ -433,41 +554,33 @@ const ReportsPage = () => {
     }
   };
 
-
-  // ============================================================
-  // LOADING SCREEN
-  // ============================================================
+  // ==========================================================
+  // LOADING
+  // ==========================================================
 
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-
         <Toaster position="top-right" />
 
         <div className="text-center">
-
-          <Loader
-            className="w-10 h-10 text-indigo-600 animate-spin mx-auto mb-4"
-          />
+          <Loader className="w-10 h-10 text-indigo-600 animate-spin mx-auto mb-4" />
 
           <p className="text-gray-600">
             Loading report...
           </p>
-
         </div>
       </div>
     );
   }
 
-
-  // ============================================================
-  // NO REPORT SCREEN
-  // ============================================================
+  // ==========================================================
+  // NO REPORT
+  // ==========================================================
 
   if (!report) {
     return (
       <div className="min-h-screen bg-gray-50 p-8">
-
         <Toaster position="top-right" />
 
         <div className="max-w-4xl mx-auto">
@@ -477,9 +590,9 @@ const ReportsPage = () => {
             className="flex items-center gap-2 text-gray-600 hover:text-gray-800 mb-6"
           >
             <ArrowLeft className="w-4 h-4" />
+
             Back to Project
           </Link>
-
 
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-12 text-center">
 
@@ -491,61 +604,80 @@ const ReportsPage = () => {
               No Report Found
             </h2>
 
-            <p className="text-gray-500 mt-2">
-              {error || 'Run tests first to generate a report.'}
+            <p className="text-gray-500 mt-3">
+              {error ||
+                'Run the tests successfully first to generate a report.'}
             </p>
 
-            <div className="flex items-center justify-center gap-3 mt-6">
+            {project && (
+              <p className="text-xs text-gray-400 mt-3 break-all">
+                Project ID: {id}
+              </p>
+            )}
+
+            <div className="flex flex-wrap items-center justify-center gap-3 mt-6">
 
               <button
                 onClick={fetchReport}
                 className="bg-gray-100 text-gray-700 px-5 py-2 rounded-xl hover:bg-gray-200 transition flex items-center gap-2"
               >
                 <RefreshCw className="w-4 h-4" />
+
                 Refresh
               </button>
 
-
               <Link
                 to={`/projects/${id}`}
-                className="bg-indigo-600 text-white px-6 py-2 rounded-xl hover:bg-indigo-700 transition"
+                className="bg-indigo-600 text-white px-6 py-2 rounded-xl hover:bg-indigo-700 transition flex items-center gap-2"
               >
-                Back to Project
+                <Play className="w-4 h-4" />
+
+                Run Tests
               </Link>
 
             </div>
 
           </div>
-
         </div>
       </div>
     );
   }
 
+  // ==========================================================
+  // NORMALIZE REPORT
+  // ==========================================================
 
-  // ============================================================
-  // SAFE REPORT DATA
-  // ============================================================
+  const summary =
+    report.summary || {};
 
-  const summary = report.summary || {};
-
-  const results = Array.isArray(report.results)
+  const results = Array.isArray(
+    report.results
+  )
     ? report.results
-    : [];
+    : Array.isArray(report.testResults)
+      ? report.testResults
+      : [];
 
-  const passed = Number(summary.passed || 0);
-  const failed = Number(summary.failed || 0);
-  const errors = Number(summary.errors || 0);
+  const passed =
+    Number(summary.passed) || 0;
+
+  const failed =
+    Number(summary.failed) || 0;
+
+  const errors =
+    Number(summary.errors) || 0;
 
   const successRate =
-    summary.successRate !== undefined
-      ? summary.successRate
-      : 0;
+    Number(summary.successRate) || 0;
 
+  const projectName =
+    report.projectName ||
+    project?.name ||
+    'Project';
 
-  // ============================================================
-  // MAIN REPORT UI
-  // ============================================================
+  // ==========================================================
+  // MAIN UI
+  // ==========================================================
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -554,18 +686,18 @@ const ReportsPage = () => {
 
       <div className="max-w-6xl mx-auto px-4 py-8">
 
-        {/* BACK BUTTON */}
+        {/* BACK */}
 
         <Link
           to={`/projects/${id}`}
           className="flex items-center gap-2 text-gray-600 hover:text-gray-800 mb-6"
         >
           <ArrowLeft className="w-4 h-4" />
+
           Back to Project
         </Link>
 
-
-        {/* REPORT HEADER */}
+        {/* HEADER */}
 
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 mb-6">
 
@@ -578,11 +710,10 @@ const ReportsPage = () => {
               </h1>
 
               <p className="text-gray-500 mt-1">
-                Project: {report.projectName || 'Project'}
+                Project: {projectName}
               </p>
 
             </div>
-
 
             <button
               onClick={fetchReport}
@@ -594,79 +725,59 @@ const ReportsPage = () => {
 
           </div>
 
-
           {/* SUMMARY */}
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
 
             <div className="bg-green-50 rounded-xl p-4 text-center">
-
               <div className="text-2xl font-bold text-green-600">
                 {passed}
               </div>
-
               <div className="text-sm text-gray-600">
                 ✅ Passed
               </div>
-
             </div>
 
-
             <div className="bg-red-50 rounded-xl p-4 text-center">
-
               <div className="text-2xl font-bold text-red-600">
                 {failed}
               </div>
-
               <div className="text-sm text-gray-600">
                 ❌ Failed
               </div>
-
             </div>
 
-
             <div className="bg-yellow-50 rounded-xl p-4 text-center">
-
               <div className="text-2xl font-bold text-yellow-600">
                 {errors}
               </div>
-
               <div className="text-sm text-gray-600">
                 ⚠️ Errors
               </div>
-
             </div>
 
-
             <div className="bg-blue-50 rounded-xl p-4 text-center">
-
               <div className="text-2xl font-bold text-blue-600">
-                {successRate}
+                {successRate}%
               </div>
-
               <div className="text-sm text-gray-600">
                 📈 Success Rate
               </div>
-
             </div>
 
           </div>
 
         </div>
 
-
         {/* ACTIONS */}
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-
-          {/* HTML */}
 
           <button
             onClick={downloadHTML}
             disabled={downloadingHTML}
             className="bg-indigo-50 text-indigo-600 p-4 rounded-xl hover:bg-indigo-100 transition flex items-center justify-center gap-2 disabled:opacity-50"
           >
-
             {downloadingHTML ? (
               <Loader className="w-5 h-5 animate-spin" />
             ) : (
@@ -676,18 +787,13 @@ const ReportsPage = () => {
             {downloadingHTML
               ? 'Downloading...'
               : 'Download HTML'}
-
           </button>
-
-
-          {/* PDF */}
 
           <button
             onClick={downloadPDF}
             disabled={downloadingPDF}
             className="bg-purple-50 text-purple-600 p-4 rounded-xl hover:bg-purple-100 transition flex items-center justify-center gap-2 disabled:opacity-50"
           >
-
             {downloadingPDF ? (
               <Loader className="w-5 h-5 animate-spin" />
             ) : (
@@ -697,11 +803,7 @@ const ReportsPage = () => {
             {downloadingPDF
               ? 'Downloading...'
               : 'Download PDF'}
-
           </button>
-
-
-          {/* EMAIL */}
 
           <div className="flex gap-2">
 
@@ -709,7 +811,9 @@ const ReportsPage = () => {
               type="email"
               placeholder="Enter email"
               value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              onChange={(e) =>
+                setEmail(e.target.value)
+              }
               className="flex-1 min-w-0 px-4 py-2 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500"
             />
 
@@ -718,23 +822,22 @@ const ReportsPage = () => {
               disabled={sending}
               className="bg-indigo-600 text-white px-4 py-2 rounded-xl hover:bg-indigo-700 transition disabled:opacity-50 flex items-center gap-2"
             >
-
               {sending ? (
                 <Loader className="w-4 h-4 animate-spin" />
               ) : (
                 <Mail className="w-4 h-4" />
               )}
 
-              {sending ? 'Sending...' : 'Send'}
-
+              {sending
+                ? 'Sending...'
+                : 'Send'}
             </button>
 
           </div>
 
         </div>
 
-
-        {/* TEST RESULTS */}
+        {/* RESULTS */}
 
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
 
@@ -745,7 +848,6 @@ const ReportsPage = () => {
             </h3>
 
           </div>
-
 
           {results.length === 0 ? (
 
@@ -791,21 +893,38 @@ const ReportsPage = () => {
 
                 </thead>
 
-
                 <tbody className="divide-y divide-gray-100">
 
                   {results.map((result, index) => {
 
-                    const responseTime =
-                      Number(result.responseTime || 0);
-
                     const status =
-                      result.status || 'UNKNOWN';
+                      String(
+                        result?.status ||
+                        result?.result ||
+                        'UNKNOWN'
+                      ).toUpperCase();
+
+                    const responseTime =
+                      Number(
+                        result?.responseTime ||
+                        result?.duration ||
+                        result?.time ||
+                        0
+                      );
+
+                    const responseStatus =
+                      result?.responseStatus ??
+                      result?.statusCode ??
+                      result?.response?.status ??
+                      '-';
 
                     return (
-
                       <tr
-                        key={result._id || result.id || index}
+                        key={
+                          result?._id ||
+                          result?.id ||
+                          index
+                        }
                         className="hover:bg-gray-50 transition"
                       >
 
@@ -813,16 +932,15 @@ const ReportsPage = () => {
                           {index + 1}
                         </td>
 
-
                         <td className="px-4 py-3 text-sm font-mono">
-                          {result.method || '-'}
+                          {result?.method || '-'}
                         </td>
-
 
                         <td className="px-4 py-3 text-sm font-mono text-gray-600 max-w-xs break-all">
-                          {result.endpoint || '-'}
+                          {result?.endpoint ||
+                            result?.url ||
+                            '-'}
                         </td>
-
 
                         <td className="px-4 py-3">
 
@@ -840,11 +958,9 @@ const ReportsPage = () => {
 
                         </td>
 
-
                         <td className="px-4 py-3 text-sm">
-                          {result.responseStatus ?? '-'}
+                          {responseStatus}
                         </td>
-
 
                         <td className="px-4 py-3 text-sm">
                           {responseTime > 0
@@ -853,9 +969,7 @@ const ReportsPage = () => {
                         </td>
 
                       </tr>
-
                     );
-
                   })}
 
                 </tbody>
@@ -863,9 +977,7 @@ const ReportsPage = () => {
               </table>
 
             </div>
-
           )}
-
 
           <div className="p-4 bg-gray-50 border-t border-gray-100 text-sm text-gray-500">
             Total: {results.length} tests
